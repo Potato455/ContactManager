@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: controllers/auth.controller.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: controllers/auth.controller.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>const config = require("../config/auth.config");
+const db = require("../models");
+const User = db.user;
+const Role = db.role;
+
+var jwt = require("jsonwebtoken");
+var bcrypt = require("bcryptjs");
+
+/**
+ * Register a new user.
+ * The request body must contain a username and password, and the roles of the user.
+ * 
+ * @param {Request} req
+ * @param {Response} res
+ * @returns {Response} 500 if there is an error
+ */
+exports.signup = (req, res) => {
+  const user = new User({
+    
+    username: req.body.username,
+    password: bcrypt.hashSync(req.body.password, 8),
+  });
+
+  user.save((err, user) => {
+    if (err) {
+      res.status(500).send({ message: err });
+      return;
+    }
+
+    if (req.body.roles) {
+      Role.find(
+        {
+          name: { $in: req.body.roles },
+        },
+        (err, roles) => {
+          if (err) {
+            res.status(500).send({ message: err });
+            return;
+          }
+
+          user.roles = roles.map((role) => role._id);
+          user.save((err) => {
+            if (err) {
+              res.status(500).send({ message: err });
+              return;
+            }
+
+            res.send({ message: "User was registered successfully!" });
+          });
+        }
+      );
+    } else {
+      Role.findOne({ name: "user" }, (err, role) => {
+        if (err) {
+          res.status(500).send({ message: err });
+          return;
+        }
+
+        user.roles = [role._id];
+        user.save((err) => {
+          if (err) {
+            res.status(500).send({ message: err });
+            return;
+          }
+
+          res.send({ message: "User was registered successfully!" });
+        });
+      });
+    }
+  });
+};
+
+/**
+ * Sign in a user.
+ * The request body must contain a username and password.
+ * The password is hashed and compared to the stored password.
+ * A jwt token is generated and saved in the session.
+ * 
+ * @param {Request} req
+ * @param {Response} res
+ * @returns {Response} 404 if the user is not found, 401 if the password is invalid, 500 if there is an error
+ */
+exports.signin = (req, res) => {
+  User.findOne({
+    username: req.body.username,
+  })
+    .populate("roles", "-__v")
+    .exec((err, user) => {
+      if (err) {
+        res.status(500).send({ message: err });
+        return;
+      }
+
+      if (!user) {
+        return res.status(404).send({ message: "User Not found." });
+      }
+
+      var passwordIsValid = bcrypt.compareSync(
+        req.body.password,
+        user.password
+      );
+
+      if (!passwordIsValid) {
+        return res.status(401).send({ message: "Invalid Password!" });
+      }
+
+      var token = jwt.sign({ id: user.id }, config.secret, {
+        expiresIn: 86400, // 24 hours
+      });
+
+      var authorities = [];
+
+      for (let i = 0; i &lt; user.roles.length; i++) {
+        authorities.push("ROLE_" + user.roles[i].name.toUpperCase());
+      }
+
+      req.session.token = token;
+
+      res.status(200).send({
+        id: user._id,
+        username: user.username,
+        roles: authorities,
+      });
+      console.log(user.username + " has signed in");
+    });
+};
+
+/**
+ * Sign out a user.
+ * The session is set to null.
+ * 
+ * @param {Request} req
+ * @param {Response} res
+ * @returns {Response} 200 if the user is signed out
+ */
+exports.signout = async (req, res) => {
+  try {
+    req.session = null;
+    return res.status(200).send({ message: "You've been signed out!" });
+  } catch (err) {
+    this.next(err);
+  }
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#UserSchema">UserSchema</a></li><li><a href="global.html#checkRolesExisted">checkRolesExisted</a></li><li><a href="global.html#create">create</a></li><li><a href="global.html#delete">delete</a></li><li><a href="global.html#deleteContact">deleteContact</a></li><li><a href="global.html#findAll">findAll</a></li><li><a href="global.html#findByName">findByName</a></li><li><a href="global.html#isAdmin">isAdmin</a></li><li><a href="global.html#isModerator">isModerator</a></li><li><a href="global.html#show">show</a></li><li><a href="global.html#signin">signin</a></li><li><a href="global.html#signout">signout</a></li><li><a href="global.html#signup">signup</a></li><li><a href="global.html#update">update</a></li><li><a href="global.html#updateContact">updateContact</a></li><li><a href="global.html#verifyToken">verifyToken</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.2</a> on Sun Apr 09 2023 20:57:00 GMT-0400 (Eastern Daylight Saving Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
